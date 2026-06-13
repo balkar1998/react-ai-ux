@@ -10,4 +10,10 @@ export interface AITableProps {
   proxyUrl?: string
   language?: string
   className?: string
+  pageSize?: number
+}
+
+export interface FilterResult {
+  indices: number[]
+  explanation: string
 }
