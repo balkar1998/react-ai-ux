@@ -43,7 +43,7 @@ No backend ML setup. No vector databases. No complex configuration. Just drop in
 ### AITable - Natural Language Querying Filtering
 ![AITable Demo](./assets/tableFilter.gif)
 
-### AITable — Natural Language Querying Insights
+### AITable — Natural Language Querying Insights with multilanguage( Hindi/punjabi/All ) 
 ![AITable Demo](./assets/table-insights-multilanguages.gif)
 
 ---
