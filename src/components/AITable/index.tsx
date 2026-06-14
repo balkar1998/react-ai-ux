@@ -1,6 +1,8 @@
 import React, { useState, useRef } from 'react'
-import { AITableProps } from './types'
+import { AITableProps, AITableMode } from './types'
 import { useAIFilter } from './useAIFilter'
+
+const DEFAULT_MODES: AITableMode[] = ['filter', 'aggregate', 'insight']
 
 export function AITable({
   data,
@@ -10,39 +12,80 @@ export function AITable({
   language,
   className,
   pageSize = 10,
+  modes = DEFAULT_MODES,
 }: AITableProps) {
   const [query, setQuery] = useState('')
   const [filteredIndices, setFilteredIndices] = useState<number[]>(
     data.map((_, i) => i)
   )
   const [page, setPage] = useState(1)
+  const [aggregateAnswer, setAggregateAnswer] = useState<string | null>(null)
+  const [aggregateExplanation, setAggregateExplanation] = useState<string | null>(null)
+  const [insightAnswer, setInsightAnswer] = useState<string | null>(null)
+  const [activeMode, setActiveMode] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const { filterData, loading, error, explanation } = useAIFilter({
+  const { processQuery, loading, error, getPlaceholder } = useAIFilter({
     apiKey,
     proxyUrl,
     language,
+    modes,
   })
 
   const handleSearch = async () => {
     if (!query.trim()) {
-      setFilteredIndices(data.map((_, i) => i))
+      resetState()
       return
     }
-    const indices = await filterData(query, data)
-    setFilteredIndices(indices)
-    setPage(1)
+
+    const result = await processQuery(query, data)
+    if (!result) return
+
+    if (result.mode === 'filter') {
+      setFilteredIndices(result.indices)
+      setAggregateAnswer(null)
+      setAggregateExplanation(null)
+      setInsightAnswer(null)
+      setActiveMode('filter')
+      setPage(1)
+    }
+
+    if (result.mode === 'aggregate') {
+      setAggregateAnswer(result.answer)
+      setAggregateExplanation(result.explanation)
+      setFilteredIndices(data.map((_, i) => i))
+      setInsightAnswer(null)
+      setActiveMode('aggregate')
+      setPage(1)
+    }
+
+    if (result.mode === 'insight') {
+      setInsightAnswer(result.answer)
+      setFilteredIndices(result.indices)
+      setAggregateAnswer(null)
+      setAggregateExplanation(null)
+      setActiveMode('insight')
+      setPage(1)
+    }
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') handleSearch()
+  const resetState = () => {
+    setFilteredIndices(data.map((_, i) => i))
+    setAggregateAnswer(null)
+    setAggregateExplanation(null)
+    setInsightAnswer(null)
+    setActiveMode(null)
+    setPage(1)
   }
 
   const handleClear = () => {
     setQuery('')
-    setFilteredIndices(data.map((_, i) => i))
-    setPage(1)
+    resetState()
     inputRef.current?.focus()
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') handleSearch()
   }
 
   const totalPages = Math.ceil(filteredIndices.length / pageSize)
@@ -50,6 +93,9 @@ export function AITable({
     (page - 1) * pageSize,
     page * pageSize
   )
+
+  const isHighlighted = (rowIndex: number) =>
+    activeMode === 'insight' && filteredIndices.includes(rowIndex)
 
   return (
     <div className={className} style={{ width: '100%', fontFamily: 'sans-serif' }}>
@@ -62,7 +108,7 @@ export function AITable({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder='Try "show orders above 5000" or "pending status"...'
+          placeholder={getPlaceholder()}
           style={{
             flex: 1,
             padding: '8px 12px',
@@ -86,7 +132,7 @@ export function AITable({
             opacity: loading ? 0.7 : 1,
           }}
         >
-          {loading ? 'Searching...' : 'Search'}
+          {loading ? 'Thinking...' : 'Ask'}
         </button>
         {query && (
           <button
@@ -106,20 +152,66 @@ export function AITable({
         )}
       </div>
 
+      {/* Aggregate answer card */}
+      {aggregateAnswer && (
+        <div style={{
+          backgroundColor: '#eef2ff',
+          border: '1px solid #c7d2fe',
+          borderRadius: '8px',
+          padding: '16px 20px',
+          marginBottom: '16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '16px',
+        }}>
+          <div style={{ fontSize: '28px', fontWeight: 700, color: '#4f46e5' }}>
+            {aggregateAnswer}
+          </div>
+          <div style={{ fontSize: '13px', color: '#6366f1' }}>
+            {aggregateExplanation}
+          </div>
+        </div>
+      )}
+
+      {/* Insight answer card */}
+      {insightAnswer && (
+        <div style={{
+          backgroundColor: '#f0fdf4',
+          border: '1px solid #bbf7d0',
+          borderRadius: '8px',
+          padding: '16px 20px',
+          marginBottom: '16px',
+        }}>
+          <div style={{ fontSize: '13px', fontWeight: 600, color: '#15803d', marginBottom: '4px' }}>
+            ✦ AI Insight
+          </div>
+          <div style={{ fontSize: '14px', color: '#166534', lineHeight: 1.6 }}>
+            {insightAnswer}
+          </div>
+        </div>
+      )}
+
       {/* Status bar */}
       <div style={{ minHeight: '24px', marginBottom: '8px', fontSize: '13px' }}>
         {loading && (
           <span style={{ color: '#9ca3af' }}>Analyzing your query...</span>
         )}
-        {!loading && explanation && (
-          <span style={{ color: '#4f46e5' }}>✦ {explanation}</span>
-        )}
         {!loading && error && (
           <span style={{ color: '#dc2626' }}>✗ {error}</span>
         )}
-        {!loading && !explanation && !error && (
+        {!loading && !error && activeMode === 'filter' && (
+          <span style={{ color: '#4f46e5' }}>
+            ✦ Showing {filteredIndices.length} of {data.length} rows
+          </span>
+        )}
+        {!loading && !error && activeMode === 'insight' && (
+          <span style={{ color: '#15803d' }}>
+            ✦ {filteredIndices.length} relevant rows highlighted
+          </span>
+        )}
+        {!loading && !error && !activeMode && (
           <span style={{ color: '#9ca3af' }}>
-            {filteredIndices.length} of {data.length} rows
+            {data.length} rows total
           </span>
         )}
       </div>
@@ -159,12 +251,15 @@ export function AITable({
               paginatedIndices.map((rowIndex) => (
                 <tr
                   key={rowIndex}
-                  style={{ borderBottom: '1px solid #f3f4f6' }}
+                  style={{
+                    borderBottom: '1px solid #f3f4f6',
+                    backgroundColor: isHighlighted(rowIndex) ? '#f0fdf4' : 'transparent',
+                  }}
                   onMouseEnter={(e) =>
-                    (e.currentTarget.style.backgroundColor = '#f9fafb')
+                    (e.currentTarget.style.backgroundColor = isHighlighted(rowIndex) ? '#dcfce7' : '#f9fafb')
                   }
                   onMouseLeave={(e) =>
-                    (e.currentTarget.style.backgroundColor = 'transparent')
+                    (e.currentTarget.style.backgroundColor = isHighlighted(rowIndex) ? '#f0fdf4' : 'transparent')
                   }
                 >
                   {columns.map((col) => (
@@ -184,7 +279,13 @@ export function AITable({
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div style={{ display: 'flex', gap: '8px', marginTop: '12px', alignItems: 'center', justifyContent: 'flex-end' }}>
+        <div style={{
+          display: 'flex',
+          gap: '8px',
+          marginTop: '12px',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+        }}>
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
