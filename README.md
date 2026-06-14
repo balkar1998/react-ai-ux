@@ -40,7 +40,10 @@ No backend ML setup. No vector databases. No complex configuration. Just drop in
 ### AIForm — Smart Validation
 ![AIForm Demo](./assets/AIform-Email.gif)
 
-### AITable — Natural Language Querying
+### AITable - Natural Language Querying Filtering
+![AITable Demo](./assets/tableFilter.gif)
+
+### AITable — Natural Language Querying Insights
 ![AITable Demo](./assets/table-insights-multilanguages.gif)
 
 ---
